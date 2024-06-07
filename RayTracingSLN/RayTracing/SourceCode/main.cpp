@@ -5,6 +5,7 @@
 #include "platform.h"
 #include "our_gl.h"
 #include "Shader.h"
+#include "GouradShader.h"
 
 
 static const char* const WINDOW_TITLE = "RayTracing";
@@ -20,7 +21,7 @@ extern mat<4, 4> ModelView; // "OpenGL" state matrices
 extern mat<4, 4> Projection;
 
 #pragma region 灯光和材质和MVP矩阵
-constexpr vec3 light_dir{ 1,1,1 }; // light source
+ vec3 light_dir{ 100,100,0 }; // light source
 constexpr vec3       eye{ 1,1,3 }; // camera position
 constexpr vec3    center{ 0,0,0 }; // camera direction
 constexpr vec3        up{ 0,1,0 }; // camera up vector
@@ -33,17 +34,17 @@ std::vector<vec3> lights = std::vector<vec3>{
 };
 
 std::vector<Model> models;
-constexpr Material      ivory = { 1.0, {0.9,  0.5, 0.1, 0.0}, {0.4, 0.4, 0.3},   50. };
-constexpr Material      glass = { 1.5, {0.0,  0.9, 0.1, 0.8}, {0.6, 0.7, 0.8},  125. };
-constexpr Material red_rubber = { 1.0, {1.4,  0.3, 0.0, 0.0}, {0.3, 0.1, 0.1},   10. };
-constexpr Material     mirror = { 1.0, {0.0, 16.0, 0.8, 0.0}, {1.0, 1.0, 1.0}, 1425. };
+constexpr Material      ivory = { 1.0, {0.9,  0.5, 0.1, 0.0}, {0.4 , 0.4 , 0.3 },   50. };
+constexpr Material      glass = { 1.5, {0.0,  0.9, 0.1, 0.8}, {0.6 , 0.7 , 0.8 },  125. };
+constexpr Material red_rubber = { 1.0, {1.4,  0.3, 0.0, 0.0}, {0.3 , 0.1 , 0.1 },   10. };
+constexpr Material     mirror = { 1.0, {0.0, 16.0, 0.8, 0.0}, {1.0 , 1.0 , 1.0 }, 1425. };
 #pragma endregion
 
-
+std::vector<std::string> path = std::vector<std::string>{ "../obj/african_head.obj" };
 #pragma region 模型加载
 void LoadModel()
 {
-    LoadObj model("../obj/floor.obj");
+    LoadObj model(path[0]);
     std::vector<std::vector<vec3 >> world_coords;
     // First model
     for (int i = 0; i < model.nfaces(); ++i) {
@@ -61,22 +62,22 @@ void LoadModel()
     }
     models.emplace_back(world_coords, red_rubber);
 
-    world_coords.clear();
-    // First model
-    for (int i = 0; i < model.nfaces(); ++i) {
-        std::vector<vec3 > currTri;
-        for (int j : {0, 1, 2}) {
-            vec3  vertex = model.vert(i, j);
-            vertex.x *= 0.3;
-            vertex.y *= 1;
-            vertex.z *= 1;
-            vertex.z -= 1;
-            vertex.x -= 0.5;
-            currTri.push_back(vertex);
-        }
-        world_coords.push_back(currTri);
-    }
-    models.emplace_back(world_coords, mirror);
+    //world_coords.clear();
+    //// First model
+    //for (int i = 0; i < model.nfaces(); ++i) {
+    //    std::vector<vec3 > currTri;
+    //    for (int j : {0, 1, 2}) {
+    //        vec3  vertex = model.vert(i, j);
+    //        vertex.x *= 0.3;
+    //        vertex.y *= 1;
+    //        vertex.z *= 1;
+    //        vertex.z -= 1;
+    //        vertex.x -= 0.5;
+    //        currTri.push_back(vertex);
+    //    }
+    //    world_coords.push_back(currTri);
+    //}
+    //models.emplace_back(world_coords, mirror);
 
     //world_coords.clear();
     //// First model
@@ -110,13 +111,13 @@ void CalculatePerPix(float fov,vec3 eye)
 		float dir_x = (pix % WINDOW_WIDTH + 0.5) - WINDOW_WIDTH / 2-eye.x;
 		float dir_y = eye.y-(pix / WINDOW_WIDTH + 0.5) + WINDOW_HEIGHT / 2 ; // this flips the image at the same time
 		float dir_z = eye.z -WINDOW_HEIGHT / (2. * tan(fov / 2.)) ;
-		frame_buffer->set_color(pix % WINDOW_WIDTH, pix / WINDOW_WIDTH, cast_ray(vec3{ 0,0,0 }, vec3{ dir_x, dir_y, dir_z }.normalized(), models, lights));
+		frame_buffer->set_color0_1(pix % WINDOW_WIDTH, pix / WINDOW_WIDTH, cast_ray(vec3{ 0,0,0 }, vec3{ dir_x, dir_y, dir_z }.normalized(), models, lights));
 		//frame_buffer->set_color(pix % WINDOW_WIDTH, pix / WINDOW_WIDTH, vec3{ 0,0,0 });
 	}
 }
 #pragma endregion
 
-std::vector<std::string> path = std::vector<std::string>{ "../obj/floor.obj" };
+
 
 int main()
 {
@@ -136,11 +137,12 @@ frame_buffer = new RenderBuffer(WINDOW_WIDTH, WINDOW_HEIGHT);
 	projection((eye - center).norm()); // build the Projection matrix
 	LoadObj model(path[0]);
 	std::vector<double> zbuffer(WINDOW_WIDTH * WINDOW_HEIGHT, std::numeric_limits<double>::max());
-		Shader shader(model, light_dir, ModelView,Projection);
+	GouradShader shader(model, light_dir.normalized(), ModelView, Projection);
 		for (int i = 0; i < model.nfaces(); i++) { // for every triangle
 			vec4 clip_vert[3]; // triangle coordinates (clip coordinates), written by VS, read by FS
 			for (int j : {0, 1, 2})
 				shader.vertex(i, j, clip_vert[j]); // call the vertex shader for each triangle vertex
+
 			triangle(clip_vert, shader, *frame_buffer, zbuffer); // actual rasterization routine call
 		}
 #pragma endregion
@@ -164,9 +166,6 @@ frame_buffer = new RenderBuffer(WINDOW_WIDTH, WINDOW_HEIGHT);
 	window = window_create(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TEXT_WIDTH, WINDOW_TEXT_HEIGHT);
 	//frame_buffer = new RenderBuffer(WINDOW_WIDTH, WINDOW_HEIGHT);
 #pragma endregion
-
-
-
 
 	while (!window_should_close(window)) {
 		float curr_time = platform_get_time();

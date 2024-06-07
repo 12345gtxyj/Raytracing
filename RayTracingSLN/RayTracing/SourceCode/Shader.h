@@ -10,9 +10,11 @@ struct Shader : IShader {
     mat<2, 3> varying_uv;  // triangle uv coordinates, written by the vertex shader, read by the fragment shader
     mat<3, 3> varying_nrm; // normal per vertex to be interpolated by FS
     mat<3, 3> view_tri;    // triangle in view coordinates
+    mat<4, 4>Viewport;
     mat<4, 4> ModelView;
     mat<4, 4> Projection;
-    Shader(const LoadObj& m,const vec3 light_dir,mat<4, 4> ModelView, mat<4, 4> Projection) : model(m),ModelView(ModelView),Projection(Projection) {
+    vec3 light_dir;
+    Shader(const LoadObj& m,const vec3 light_dir,mat<4, 4> ModelView, mat<4, 4> Projection) : model(m),ModelView(ModelView),Projection(Projection), light_dir(light_dir){
         uniform_l = proj<3>((ModelView * embed<4>(light_dir, 0.))).normalized(); // transform the light vector to view coordinates
     }
 

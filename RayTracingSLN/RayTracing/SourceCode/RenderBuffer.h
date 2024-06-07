@@ -13,7 +13,8 @@ public:
 
 	void set_depth(int x, int y, float depth);
 	float get_depth(int x, int y);
-	void set_color(int x, int y, Color color);
+	void set_color0_1(int x, int y, Color color);
+	void set_color0_255(int x, int y, Color color);
 	Color get_color(int x, int y);
 
 	void renderbuffer_release();
