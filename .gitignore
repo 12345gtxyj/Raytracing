@@ -1,0 +1,13 @@
+
+RayTracingSLN/x64
+RayTracingSLN/.vs
+RayTracingSLN/packages
+RayTracingSLN/RayTracing/x64
+RayTracingSLN/RayTracingSLN.sln
+RayTracingSLN/RayTracing/packages.config
+RayTracingSLN/RayTracing/PropertySheet.props
+RayTracingSLN/RayTracing/RayTracing_TemporaryKey.pfx
+RayTracingSLN/RayTracing/RayTracing.vcxproj
+RayTracingSLN/RayTracing/RayTracing.vcxproj.filters
+RayTracingSLN/RayTracing/RayTracing.vcxproj.user
+RayTracingSLN/RayTracing/readme.txt

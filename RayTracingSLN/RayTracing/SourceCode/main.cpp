@@ -3,16 +3,28 @@
 #include "Model.h"
 #include "RayCaster.h"
 #include "platform.h"
+#include "our_gl.h"
+#include "Shader.h"
 
 
 static const char* const WINDOW_TITLE = "RayTracing";
-static const int WINDOW_WIDTH = 200;
-static const int WINDOW_HEIGHT = 200;
+static const int WINDOW_WIDTH = 500;
+static const int WINDOW_HEIGHT = 500;
 static const int WINDOW_TEXT_WIDTH =50;
-static const int WINDOW_TEXT_HEIGHT = 50;
+static const int WINDOW_TEXT_HEIGHT = 70;
 int scene_count = 2;
 //SceneInfo scene_info;
 RenderBuffer* frame_buffer = nullptr;
+
+extern mat<4, 4> ModelView; // "OpenGL" state matrices
+extern mat<4, 4> Projection;
+
+#pragma region 灯光和材质和MVP矩阵
+constexpr vec3 light_dir{ 1,1,1 }; // light source
+constexpr vec3       eye{ 1,1,3 }; // camera position
+constexpr vec3    center{ 0,0,0 }; // camera direction
+constexpr vec3        up{ 0,1,0 }; // camera up vector
+
 
 
 std::vector<vec3> lights = std::vector<vec3>{
@@ -25,8 +37,7 @@ constexpr Material      ivory = { 1.0, {0.9,  0.5, 0.1, 0.0}, {0.4, 0.4, 0.3},  
 constexpr Material      glass = { 1.5, {0.0,  0.9, 0.1, 0.8}, {0.6, 0.7, 0.8},  125. };
 constexpr Material red_rubber = { 1.0, {1.4,  0.3, 0.0, 0.0}, {0.3, 0.1, 0.1},   10. };
 constexpr Material     mirror = { 1.0, {0.0, 16.0, 0.8, 0.0}, {1.0, 1.0, 1.0}, 1425. };
-
-
+#pragma endregion
 
 
 #pragma region 模型加载
@@ -48,7 +59,7 @@ void LoadModel()
         }
         world_coords.push_back(currTri);
     }
-    models.emplace_back(world_coords, ivory);
+    models.emplace_back(world_coords, red_rubber);
 
     world_coords.clear();
     // First model
@@ -67,7 +78,7 @@ void LoadModel()
     }
     models.emplace_back(world_coords, mirror);
 
-    world_coords.clear();
+    //world_coords.clear();
     //// First model
     //for (int i = 0; i < model.nfaces(); ++i) {
     //    std::vector<vec3 > currTri;
@@ -87,6 +98,7 @@ void LoadModel()
 }
 #pragma endregion
 
+#pragma region  光线追踪函数 
 void CalculatePerPix(float fov,vec3 eye)
 {
 	// 清除颜色缓存和深度缓存
@@ -99,13 +111,42 @@ void CalculatePerPix(float fov,vec3 eye)
 		float dir_y = eye.y-(pix / WINDOW_WIDTH + 0.5) + WINDOW_HEIGHT / 2 ; // this flips the image at the same time
 		float dir_z = eye.z -WINDOW_HEIGHT / (2. * tan(fov / 2.)) ;
 		frame_buffer->set_color(pix % WINDOW_WIDTH, pix / WINDOW_WIDTH, cast_ray(vec3{ 0,0,0 }, vec3{ dir_x, dir_y, dir_z }.normalized(), models, lights));
+		//frame_buffer->set_color(pix % WINDOW_WIDTH, pix / WINDOW_WIDTH, vec3{ 0,0,0 });
 	}
 }
+#pragma endregion
 
+std::vector<std::string> path = std::vector<std::string>{ "../obj/floor.obj" };
 
 int main()
 {
-	LoadModel();
+// build the Projection matrix
+frame_buffer = new RenderBuffer(WINDOW_WIDTH, WINDOW_HEIGHT);
+
+#pragma region  光线追踪（可选） 
+	//LoadModel();
+	//float fov = 1.2; // 60 degrees field of view in radians
+	//vec3 eye = vec3{ 10, 0,  0 };
+	//CalculatePerPix(fov, eye);
+#pragma endregion
+
+#pragma region  软光栅（可选） 
+	lookat(eye, center, up);                            // build the ModelView matrix
+	viewport(WINDOW_WIDTH / 8, WINDOW_HEIGHT / 8, WINDOW_WIDTH * 3 / 4, WINDOW_HEIGHT * 3 / 4); // build the Viewport matrix
+	projection((eye - center).norm()); // build the Projection matrix
+	LoadObj model(path[0]);
+	std::vector<double> zbuffer(WINDOW_WIDTH * WINDOW_HEIGHT, std::numeric_limits<double>::max());
+		Shader shader(model, light_dir, ModelView,Projection);
+		for (int i = 0; i < model.nfaces(); i++) { // for every triangle
+			vec4 clip_vert[3]; // triangle coordinates (clip coordinates), written by VS, read by FS
+			for (int j : {0, 1, 2})
+				shader.vertex(i, j, clip_vert[j]); // call the vertex shader for each triangle vertex
+			triangle(clip_vert, shader, *frame_buffer, zbuffer); // actual rasterization routine call
+		}
+#pragma endregion
+
+
+#pragma region  初始化GUI界面
 	platform_initialize();
 	window_t* window;
 	//Record record = Record();
@@ -121,40 +162,26 @@ int main()
 	const float REFRESH_SCREEN_TEXT_TIME = 0.1;
 	snprintf(screen_text, text_size, "fps: - -, avg: - -ms\n");
 	window = window_create(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TEXT_WIDTH, WINDOW_TEXT_HEIGHT);
-	frame_buffer = new RenderBuffer(WINDOW_WIDTH, WINDOW_HEIGHT);
+	//frame_buffer = new RenderBuffer(WINDOW_WIDTH, WINDOW_HEIGHT);
+#pragma endregion
 
-	int scene_index = 0;
 
-    float fov = 1.2; // 60 degrees field of view in radians
-    //std::vector<vec3> framebuffer(width * height);
-	vec3 eye=vec3{ 10, 0,  0 };
-	CalculatePerPix(fov, eye);
+
 
 	while (!window_should_close(window)) {
 		float curr_time = platform_get_time();
 		float delta_time = curr_time - prev_time;
 
-
-
-		//// 更新摄像机控制
-		//update_camera(window, scene_info.scene->camera, &record);
-
+		// 把帧缓存绘制到UI窗口
+		window_draw_buffer(window, frame_buffer);
+#pragma region 交互事件
 		if (input_key_pressed(window, KEY_W)) {
 			lights[0].x += 3;
-			CalculatePerPix(fov, eye);
-			/*scene_index = (scene_index - 1 + scene_count) % scene_count;
-			scene_info = load_scene(scene_index);*/
 		}
-		else if (input_key_pressed(window, KEY_S)) {
-			lights[0].x -= 3;
-			CalculatePerPix(fov, eye);
-			/*scene_index = (scene_index + 1 + scene_count) % scene_count;
-			scene_info = load_scene(scene_index);*/
-		}
+		
+#pragma endregion
 
-		// 更新场景
-		//scene_info.scene->tick(delta_time);
-
+#pragma region 文本显示
 		// 计算帧率和耗时
 		num_frames += 1;
 		if (curr_time - print_time >= 1) {
@@ -167,10 +194,6 @@ int main()
 			print_time = curr_time;
 		}
 		prev_time = curr_time;
-
-		// 把帧缓存绘制到UI窗口
-		window_draw_buffer(window, frame_buffer);
-
 		//更新显示文本信息
 		refresh_screen_text_timer += delta_time;
 		if (refresh_screen_text_timer > REFRESH_SCREEN_TEXT_TIME)
@@ -192,20 +215,11 @@ int main()
 			window_draw_text(window, screen_text);
 			refresh_screen_text_timer -= REFRESH_SCREEN_TEXT_TIME;
 		}
-
-		// 重置摄像机输入参数
-	/*	record.orbit_delta = Vector2f(0, 0);
-		record.pan_delta = Vector2f(0, 0);
-		record.dolly_delta = 0;
-		record.single_click = 0;
-		record.double_click = 0;*/
-
-		
-
+#pragma endregion
 		input_poll_events();
 	}
 
-	//delete scene_info.scene;
+
 	delete frame_buffer;
 	window_destroy(window);
 }
