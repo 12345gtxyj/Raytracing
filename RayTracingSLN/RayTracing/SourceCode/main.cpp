@@ -125,7 +125,7 @@ int main()
 
 	int scene_index = 0;
 
-    float fov = 1.5; // 60 degrees field of view in radians
+    float fov = 1.2; // 60 degrees field of view in radians
     //std::vector<vec3> framebuffer(width * height);
 	vec3 eye=vec3{ 10, 0,  0 };
 	CalculatePerPix(fov, eye);
